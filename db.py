@@ -213,12 +213,16 @@ def create_subscription(
                     owner_filter,
                     Subscription.event_code == event_code,
                     Subscription.perf_code == perf_code,
-                    Subscription.max_price_ils == max_price_ils,
                     Subscription.active == True,
                 )
                 .first()
             )
         if existing:
+            # Update price/ticket settings in case the user is changing them
+            existing.max_price_ils = max_price_ils
+            existing.ticket_desc   = ticket_desc
+            existing.ticket_code   = ticket_code
+            s.commit()
             return _detach(existing)
         sub = Subscription(
             user_id=user_id,
@@ -372,6 +376,37 @@ def update_user_settings(user_id: int, **kwargs):
             if k in allowed:
                 setattr(u, k, v)
         s.commit()
+
+
+def get_sub_for_perf(
+    telegram_chat_id: str | None,
+    user_id: int | None,
+    event_code: str,
+    perf_code: str | None,
+    include_all_perfs: bool = True,
+) -> "Subscription | None":
+    """Find the active subscription for this (owner, event, performance).
+    include_all_perfs=True also returns subs with perf_code=None (all-perf watches)."""
+    with Session() as s:
+        owner_clauses = []
+        if user_id:
+            owner_clauses.append(Subscription.user_id == user_id)
+        if telegram_chat_id:
+            owner_clauses.append(Subscription.telegram_chat_id == telegram_chat_id)
+        if not owner_clauses:
+            return None
+        perf_filter = (
+            or_(Subscription.perf_code == perf_code, Subscription.perf_code.is_(None))
+            if include_all_perfs
+            else Subscription.perf_code == perf_code
+        )
+        sub = (
+            s.query(Subscription)
+            .filter(or_(*owner_clauses), Subscription.event_code == event_code,
+                    perf_filter, Subscription.active == True)
+            .first()
+        )
+        return _detach(sub) if sub else None
 
 
 def get_subscription(sub_id: int) -> Subscription | None:

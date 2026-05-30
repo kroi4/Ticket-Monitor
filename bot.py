@@ -71,15 +71,15 @@ async def update_pinned_summary(bot: Bot, chat_id: str):
         log.warning("Could not pin message in %s: %s", chat_id, e)
 
 # ── Callback data protocol ─────────────────────────────────
-# ev:{event_code}                       → show performances
-# pf:{event_code}:{perf_code}           → show ticket types
-# tk:{event_code}:{perf_code}:{code}    → ask max price (code=ticket code or ALL)
-# sub:{event_code}:{perf_code}:{code}:{price}  → create subscription (price=0 for any)
-# del:{sub_id}                          → delete subscription
-# back:events                           → go back to event list
-# back:ev:{event_code}                  → go back to performances
-# alerts                                → show my subscriptions
-# link                                  → show linking instructions
+# ev:{event_code}                              → show performances
+# pf:{event_code}:{perf_code}                  → show ticket types
+# sub:{event_code}:{perf_code}:{code}:{price}  → create/update subscription (price=0 for any)
+# cancel:{sub_id}:{event_code}:{perf_code}     → delete sub and refresh ticket types
+# del:{sub_id}                                 → delete subscription (from alerts screen)
+# back:events                                  → go back to event list
+# back:ev:{event_code}                         → go back to performances
+# alerts                                       → show my subscriptions
+# link                                         → show linking instructions
 
 
 def _chat_id(update: Update) -> str:
@@ -191,9 +191,15 @@ async def _show_events(update: Update, context: ContextTypes.DEFAULT_TYPE, sourc
 
     src_label = SOURCES.get(source, {}).get("label", source)
     now = datetime.now().strftime("%d/%m %H:%M")
+
+    chat_id = _chat_id(update)
+    user_subs = db.get_subscriptions_for_chat(chat_id)
+    subscribed_events = {sub.event_code for sub in user_subs}
+
     keyboard = []
     for e in events:
-        keyboard.append([InlineKeyboardButton(_event_label(e), callback_data=f"ev:{e['event_code']}")])
+        prefix = "🔔 " if e["event_code"] in subscribed_events else ""
+        keyboard.append([InlineKeyboardButton(prefix + _event_label(e), callback_data=f"ev:{e['event_code']}")])
     keyboard.append([InlineKeyboardButton("🔙 חזרה", callback_data="back:sources")])
 
     header = (
@@ -213,10 +219,16 @@ async def _show_performances(update: Update, context: ContextTypes.DEFAULT_TYPE,
     perfs  = tm_api.get_performances(event_code)
     name   = detail["name"] if detail else event_code
 
+    chat_id = _chat_id(update)
+    linked_user = db.get_user_by_chat_id(chat_id)
+    user_id = linked_user.id if linked_user else None
+
     keyboard = []
     for p in perfs:
-        dow   = tm_api.dow_he(p["date_str"])
-        label = f"{p['emoji']} {p['date_str']} ({dow}) — {p['status_label']}"
+        dow    = tm_api.dow_he(p["date_str"])
+        sub    = db.get_sub_for_perf(chat_id, user_id, event_code, p["perf_code"])
+        prefix = "🔔 " if sub else ""
+        label  = f"{prefix}{p['emoji']} {p['date_str']} ({dow}) — {p['status_label']}"
         keyboard.append([InlineKeyboardButton(label, callback_data=f"pf:{event_code}:{p['perf_code']}")])
     keyboard.append([InlineKeyboardButton("🔙 חזרה", callback_data="back:events")])
 
@@ -247,29 +259,50 @@ async def _show_tickets(update: Update, context: ContextTypes.DEFAULT_TYPE,
     emoji  = perf["emoji"] if perf else "🎟️"
     slabel = perf["status_label"] if perf else ""
 
+    # Check for existing subscription on this specific performance
+    chat_id     = _chat_id(update)
+    linked_user = db.get_user_by_chat_id(chat_id)
+    user_id     = linked_user.id if linked_user else None
+    existing_sub = db.get_sub_for_perf(chat_id, user_id, event_code, perf_code, include_all_perfs=False)
+
     keyboard = []
     for p in all_types:
-        available = p["code"] in current_codes
+        available   = p["code"] in current_codes
+        is_selected = (
+            existing_sub is not None
+            and existing_sub.max_price_ils is not None
+            and abs(p["price_ils"] - existing_sub.max_price_ils) < 0.5
+        )
         if available:
             label = f"{p['description']} ({p['price_ils']:.0f} ₪)"
         else:
             label = f"{p['description']} 🔴 אזל ({p['price_ils']:.0f} ₪)"
+        if is_selected:
+            label = "✅ " + label
         keyboard.append([InlineKeyboardButton(
             label,
             callback_data=f"sub:{event_code}:{perf_code}:{p['code']}:{int(p['price_ils'])}"
         )])
+    is_all_selected = existing_sub is not None and existing_sub.max_price_ils is None
+    all_label = "✅ 📊 כל המחירים" if is_all_selected else "📊 כל המחירים"
     keyboard.append([InlineKeyboardButton(
-        "📊 כל המחירים",
+        all_label,
         callback_data=f"sub:{event_code}:{perf_code}:ALL:0"
     )])
+    if existing_sub:
+        keyboard.append([InlineKeyboardButton(
+            "🗑️ בטל מעקב",
+            callback_data=f"cancel:{existing_sub.id}:{event_code}:{perf_code}"
+        )])
     keyboard.append([InlineKeyboardButton("🔙 חזרה", callback_data=f"back:ev:{event_code}")])
 
-    status_line = f"{emoji} {slabel}" if slabel else ""
-    hint = "\n\n💡 <i>בחירת כרטיס יקר כוללת גם כרטיסים זולים ממנו</i>" if all_types else ""
+    status_line  = f"{emoji} {slabel}" if slabel else ""
+    hint         = "\n\n💡 <i>בחירת כרטיס יקר כוללת גם כרטיסים זולים ממנו</i>" if all_types else ""
     soldout_note = "\n<i>🔴 = אזל בתאריך זה — ניתן עדיין להגדיר מעקב</i>" if any(p["code"] not in current_codes for p in all_types) else ""
+    sub_note     = "\n\n🔔 <i>יש לך מעקב פעיל להופעה זו</i>" if existing_sub else ""
 
     await q.edit_message_text(
-        f"🎟️ <b>{name}</b>\n📅 {date}  {status_line}{hint}{soldout_note}\n\n"
+        f"🎟️ <b>{name}</b>\n📅 {date}  {status_line}{sub_note}{hint}{soldout_note}\n\n"
         f"בחר את <b>תקרת המחיר</b> שמעניינת אותך:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML",
@@ -324,7 +357,8 @@ async def _create_sub(update: Update, context: ContextTypes.DEFAULT_TYPE,
         perf_date_display = perf_date
 
     keyboard = [
-        [InlineKeyboardButton("📋 כל ההתראות שלי", callback_data="alerts")],
+        [InlineKeyboardButton("📋 ההתראות שלי", callback_data="alerts")],
+        [InlineKeyboardButton("🔙 חזרה להופעות", callback_data=f"back:ev:{event_code}")],
         [InlineKeyboardButton("🏠 ראשי", callback_data="back:sources")],
     ]
 
@@ -491,6 +525,18 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.answer("✅ ההתראה נמחקה", show_alert=False)
             await update_pinned_summary(context.bot, chat_id)
         await _show_alerts(update, context)
+
+    elif data.startswith("cancel:"):
+        parts      = data.split(":")
+        sub_id     = int(parts[1])
+        event_code = parts[2]
+        perf_code  = parts[3]
+        chat_id    = _chat_id(update)
+        deleted    = db.delete_subscription(sub_id, owner_chat_id=chat_id)
+        if deleted:
+            await q.answer("✅ המעקב בוטל", show_alert=False)
+            await update_pinned_summary(context.bot, chat_id)
+        await _show_tickets(update, context, event_code, perf_code)
 
     else:
         await q.answer("פעולה לא מוכרת")
