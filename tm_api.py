@@ -151,16 +151,11 @@ def get_prices(event_code: str, perf_code: str) -> list[dict]:
         block_names = ", ".join(
             (b.get("description") or "").strip() for b in blocks if b
         )
-        seat_count = sum(
-            b["number"] for b in blocks
-            if isinstance(b.get("number"), int)
-        )
         prices.append({
             "code":        code,
             "price_ils":   price_ils,
             "description": desc,
             "blocks":      block_names,
-            "count":       seat_count if seat_count > 0 else None,
         })
     prices.sort(key=lambda x: x["price_ils"])
     return prices

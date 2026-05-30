@@ -240,16 +240,11 @@ async def _show_tickets(update: Update, context: ContextTypes.DEFAULT_TYPE,
     emoji  = perf["emoji"] if perf else "🎟️"
     slabel = perf["status_label"] if perf else ""
 
-    # Build a count lookup from current (available) prices
-    current_count = {p["code"]: p.get("count") for p in current_prices}
-
     keyboard = []
     for p in all_types:
         available = p["code"] in current_codes
         if available:
-            cnt   = current_count.get(p["code"])
-            avail = f" · {cnt} מקומות" if cnt else ""
-            label = f"{p['description']} ({p['price_ils']:.0f} ₪{avail})"
+            label = f"{p['description']} ({p['price_ils']:.0f} ₪)"
         else:
             label = f"{p['description']} 🔴 אזל ({p['price_ils']:.0f} ₪)"
         keyboard.append([InlineKeyboardButton(

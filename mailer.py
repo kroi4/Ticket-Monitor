@@ -146,14 +146,13 @@ def _alert_html(sub, perf: dict, matching: list[dict], event_detail: dict | None
 
     ticket_rows = ""
     for m in matching:
-        cnt_str = f"&nbsp;·&nbsp; <b>{m['count']} מקומות</b>" if m.get("count") else ""
         ticket_rows += f"""
 <tr>
   <td style="padding:10px 12px;font-size:14px;color:#1a1f2e;border-bottom:1px solid #eaecf0;">
     {m['description']}
   </td>
   <td style="padding:10px 12px;font-size:14px;text-align:center;border-bottom:1px solid #eaecf0;">
-    <b style="color:#e53935;">{m['price_ils']:.0f} ₪</b>{cnt_str}
+    <b style="color:#e53935;">{m['price_ils']:.0f} ₪</b>
   </td>
 </tr>"""
 
