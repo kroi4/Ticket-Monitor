@@ -69,6 +69,10 @@ def get_all_events() -> list[dict]:
             "image_url":   f"{config.TM_IMG_BASE}/{e['smallImage']}" if e.get("smallImage") else "",
             "redirect":    e.get("redirectNewWebsite", False),
         })
+    result.sort(key=lambda e: (
+        datetime.strptime(e["first_date"], "%d/%m/%Y %H:%M")
+        if e["first_date"] else datetime.max.replace(tzinfo=None)
+    ))
     return result
 
 
@@ -107,6 +111,20 @@ def get_performances(event_code: str) -> list[dict]:
     return result
 
 
+def get_all_ticket_types(event_code: str) -> list[dict]:
+    """Aggregate unique ticket types across all performances of an event.
+    Needed because sold-out types don't appear in a specific performance's price list."""
+    perfs = get_performances(event_code)
+    seen: dict[str, dict] = {}
+    for perf in perfs:
+        for p in get_prices(event_code, perf["perf_code"]):
+            if p["code"] not in seen:
+                seen[p["code"]] = p
+    result = list(seen.values())
+    result.sort(key=lambda x: x["price_ils"])
+    return result
+
+
 def get_prices(event_code: str, perf_code: str) -> list[dict]:
     data = _inner(_get(f"getPriceByProfiles/{event_code}/{perf_code}/{config.TM_CHANNEL}/{config.TM_LANG}"))
     prices = []
@@ -133,11 +151,16 @@ def get_prices(event_code: str, perf_code: str) -> list[dict]:
         block_names = ", ".join(
             (b.get("description") or "").strip() for b in blocks if b
         )
+        seat_count = sum(
+            b["number"] for b in blocks
+            if isinstance(b.get("number"), int)
+        )
         prices.append({
             "code":        code,
             "price_ils":   price_ils,
             "description": desc,
             "blocks":      block_names,
+            "count":       seat_count if seat_count > 0 else None,
         })
     prices.sort(key=lambda x: x["price_ils"])
     return prices

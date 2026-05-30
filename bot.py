@@ -98,52 +98,104 @@ async def _edit_or_reply(update: Update, text: str, markup=None, **kwargs):
 
 # ── /start ────────────────────────────────────────────────
 
+# ── Ticket sources registry ───────────────────────────────
+# To add a new source: add an entry here and wire up its API call in _get_events().
+SOURCES: dict[str, dict] = {
+    "ticketmaster": {"label": "Ticketmaster", "emoji": "🎫"},
+}
+
+
+def _get_events(source: str) -> list:
+    if source == "ticketmaster":
+        return tm_api.get_all_events()
+    return []
+
+
+async def _show_sources(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = _chat_id(update)
+    user    = db.get_user_by_chat_id(chat_id)
+
+    keyboard = [
+        [InlineKeyboardButton(f"{s['emoji']} {s['label']}", callback_data=f"src:{key}")]
+        for key, s in SOURCES.items()
+    ]
+    keyboard.append([InlineKeyboardButton("📋 ההתראות שלי", callback_data="alerts")])
+
+    if user and user.email:
+        link_label = f"✅ {user.email}"
+    else:
+        link_label = "🔗 חיבור לחשבון אתר"
+    keyboard.append([InlineKeyboardButton(link_label, callback_data="link")])
+
+    await _edit_or_reply(
+        update,
+        "🎟️ <b>מעקב כרטיסי הופעות</b>\n\nבחר מקור כרטיסים:",
+        InlineKeyboardMarkup(keyboard),
+    )
+
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args or []
     if args and args[0].startswith("link_"):
         await _handle_link(update, context, args[0][5:])
         return
-    await _show_events(update, context)
+    await _show_sources(update, context)
 
 
-def _event_date_range(e: dict) -> str:
-    """Return compact date range string, e.g. '(09/06–11/06 20:15)' or '(09/06 20:15)'."""
-    first = e.get("first_date", "")   # "09/06/2026 20:15"
+_DAYS_HE = ["ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳", "א׳"]  # weekday() 0=Mon … 6=Sun
+
+
+def _dow_he(date_str: str) -> str:
+    """Hebrew day-of-week abbreviation from 'DD/MM/YYYY HH:MM'."""
+    try:
+        d = datetime.strptime(date_str.split()[0], "%d/%m/%Y")
+        return _DAYS_HE[d.weekday()]
+    except Exception:
+        return ""
+
+
+def _event_label(e: dict) -> str:
+    """Single-line button: 'Name · City (DD/MM(א) – DD/MM(ב) HH:MM)'."""
+    city  = f" · {e['venue_city']}" if e.get("venue_city") else ""
+
+    first = e.get("first_date", "")
     last  = e.get("last_date",  "")
     if not first:
-        return ""
-    def _short(d: str):
-        parts = d.split(" ")
-        day_month = parts[0][:5]   # "09/06"
-        time_part = parts[1] if len(parts) > 1 else ""
-        return day_month, time_part
-    fd, ft = _short(first)
-    ld, lt = _short(last) if last else (fd, ft)
-    if fd == ld:
-        return f"({fd} {ft})"
-    return f"({fd}–{ld} {lt})"
+        return f"{e['name']}{city}"
+
+    def _parts(d: str):
+        p = d.split(" ")
+        return p[0][:5], (p[1] if len(p) > 1 else ""), _dow_he(d)
+
+    fd, ft, fdow = _parts(first)
+    ld, lt, ldow = _parts(last) if last else (fd, ft, fdow)
+
+    date_part = f"{fd} ({fdow}) – {ld} ({ldow})" if fd != ld else f"{fd} ({fdow})"
+    time_part = f"  {ft}" if ft else ""
+    return f"{e['name']}{city}  ·  {date_part}{time_part}"
 
 
-async def _show_events(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    events = tm_api.get_all_events()
+async def _show_events(update: Update, context: ContextTypes.DEFAULT_TYPE, source: str = "ticketmaster"):
+    context.user_data["source"] = source
+    events = _get_events(source)
     if not events:
         await _edit_or_reply(update, "⚠️ לא ניתן לטעון אירועים כרגע, נסה שוב מאוחר יותר.")
         return
 
+    src_label = SOURCES.get(source, {}).get("label", source)
+    now = datetime.now().strftime("%d/%m %H:%M")
     keyboard = []
     for e in events:
-        city  = f" · {e['venue_city']}" if e["venue_city"] else ""
-        dates = f" {_event_date_range(e)}" if e.get("first_date") else ""
-        label = f"{e['name']}{city}{dates}"
-        keyboard.append([InlineKeyboardButton(label, callback_data=f"ev:{e['event_code']}")])
-    keyboard.append([InlineKeyboardButton("📋 ההתראות שלי", callback_data="alerts")])
-    keyboard.append([InlineKeyboardButton("🔗 חיבור לחשבון אתר", callback_data="link")])
+        keyboard.append([InlineKeyboardButton(_event_label(e), callback_data=f"ev:{e['event_code']}")])
+    keyboard.append([InlineKeyboardButton("🔙 חזרה", callback_data="back:sources")])
 
-    await _edit_or_reply(
-        update,
-        "🎟️ <b>מעקב כרטיסי הופעות</b>\n\nבחר הופעה:",
-        InlineKeyboardMarkup(keyboard),
+    header = (
+        f"🎫 <b>{src_label}</b>\n"
+        f"<i>⏱ עודכן: {now}</i>\n"
+        f"<i>תאריכים(יום) שעת-הופעה</i>\n\n"
+        f"בחר הופעה:"
     )
+    await _edit_or_reply(update, header, InlineKeyboardMarkup(keyboard))
 
 
 # ── Event → Performances ─────────────────────────────────
@@ -175,17 +227,30 @@ async def _show_tickets(update: Update, context: ContextTypes.DEFAULT_TYPE,
     detail = tm_api.get_event_detail(event_code)
     perfs  = tm_api.get_performances(event_code)
     perf   = next((p for p in perfs if p["perf_code"] == perf_code), None)
-    prices = tm_api.get_prices(event_code, perf_code)
+
+    # Current performance prices (only available types)
+    current_prices  = tm_api.get_prices(event_code, perf_code)
+    current_codes   = {p["code"] for p in current_prices}
+    # All ticket types known for this event (including sold-out in this performance)
+    all_types       = tm_api.get_all_ticket_types(event_code)
 
     name   = detail["name"] if detail else event_code
     date   = perf["date_str"] if perf else perf_code
     emoji  = perf["emoji"] if perf else "🎟️"
     slabel = perf["status_label"] if perf else ""
 
+    # Build a count lookup from current (available) prices
+    current_count = {p["code"]: p.get("count") for p in current_prices}
+
     keyboard = []
-    for p in prices:
-        # Choosing a tier = get alerts for that price AND anything cheaper
-        label = f"{p['description']} ({p['price_ils']:.0f} ₪)"
+    for p in all_types:
+        available = p["code"] in current_codes
+        if available:
+            cnt   = current_count.get(p["code"])
+            avail = f" · {cnt} מקומות" if cnt else ""
+            label = f"{p['description']} ({p['price_ils']:.0f} ₪{avail})"
+        else:
+            label = f"{p['description']} 🔴 אזל ({p['price_ils']:.0f} ₪)"
         keyboard.append([InlineKeyboardButton(
             label,
             callback_data=f"sub:{event_code}:{perf_code}:{p['code']}:{int(p['price_ils'])}"
@@ -197,10 +262,11 @@ async def _show_tickets(update: Update, context: ContextTypes.DEFAULT_TYPE,
     keyboard.append([InlineKeyboardButton("🔙 חזרה", callback_data=f"back:ev:{event_code}")])
 
     status_line = f"{emoji} {slabel}" if slabel else ""
-    hint = "\n\n💡 <i>בחירת כרטיס יקר כוללת גם כרטיסים זולים ממנו</i>" if prices else ""
+    hint = "\n\n💡 <i>בחירת כרטיס יקר כוללת גם כרטיסים זולים ממנו</i>" if all_types else ""
+    soldout_note = "\n<i>🔴 = אזל בתאריך זה — ניתן עדיין להגדיר מעקב</i>" if any(p["code"] not in current_codes for p in all_types) else ""
 
     await q.edit_message_text(
-        f"🎟️ <b>{name}</b>\n📅 {date}  {status_line}{hint}\n\n"
+        f"🎟️ <b>{name}</b>\n📅 {date}  {status_line}{hint}{soldout_note}\n\n"
         f"בחר את <b>תקרת המחיר</b> שמעניינת אותך:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML",
@@ -219,8 +285,8 @@ async def _create_sub(update: Update, context: ContextTypes.DEFAULT_TYPE,
     perfs     = tm_api.get_performances(event_code)
     perf      = next((p for p in perfs if p["perf_code"] == perf_code), None)
     detail    = tm_api.get_event_detail(event_code)
-    prices    = tm_api.get_prices(event_code, perf_code)
-    ticket    = next((p for p in prices if p["code"] == ticket_code), None)
+    all_types = tm_api.get_all_ticket_types(event_code)
+    ticket    = next((p for p in all_types if p["code"] == ticket_code), None)
 
     event_name  = detail["name"] if detail else event_code
     perf_date   = perf["date_str"] if perf else perf_code
@@ -248,7 +314,7 @@ async def _create_sub(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
     keyboard = [
         [InlineKeyboardButton("📋 כל ההתראות שלי", callback_data="alerts")],
-        [InlineKeyboardButton("🏠 ראשי", callback_data="back:events")],
+        [InlineKeyboardButton("🏠 ראשי", callback_data="back:sources")],
     ]
 
     text = (
@@ -293,7 +359,7 @@ async def _show_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         lines = ["📋 <b>אין לך התראות פעילות.</b>\n\nהתחל בבחירת הופעה מהרשימה הראשית."]
 
-    keyboard.append([InlineKeyboardButton("🏠 ראשי", callback_data="back:events")])
+    keyboard.append([InlineKeyboardButton("🏠 ראשי", callback_data="back:sources")])
 
     if q:
         await q.edit_message_text(
@@ -323,17 +389,16 @@ async def _show_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📧 {user.email}\n\n"
             f"ההתראות שלך מסונכרנות עם לוח הבקרה באתר."
         )
-        keyboard = [[InlineKeyboardButton("🏠 ראשי", callback_data="back:events")]]
+        keyboard = [[InlineKeyboardButton("🏠 ראשי", callback_data="back:sources")]]
     else:
         web_url = f"{config.WEB_BASE_URL}/link-telegram/{chat_id}"
         text = (
             "🔗 <b>חיבור לחשבון האתר</b>\n\n"
-            "לחץ על הכפתור — תועבר להתחברות עם Google "
-            "והחיבור יושלם <b>אוטומטית</b>."
+            "לחץ על הקישור, התחבר עם Google והחיבור יושלם <b>אוטומטית</b>:\n\n"
+            f"{web_url}"
         )
         keyboard = [
-            [InlineKeyboardButton("🌐 חיבור עם Google →", url=web_url)],
-            [InlineKeyboardButton("🏠 ראשי", callback_data="back:events")],
+            [InlineKeyboardButton("🏠 ראשי", callback_data="back:sources")],
         ]
 
     if q:
@@ -366,8 +431,15 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = q.data
     await q.answer()
 
-    if data == "back:events":
-        await _show_events(update, context)
+    if data == "back:sources":
+        await _show_sources(update, context)
+
+    elif data == "back:events":
+        source = context.user_data.get("source", "ticketmaster")
+        await _show_events(update, context, source)
+
+    elif data.startswith("src:"):
+        await _show_events(update, context, source=data[4:])
 
     elif data.startswith("back:ev:"):
         event_code = data[8:]

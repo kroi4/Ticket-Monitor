@@ -67,7 +67,7 @@ def _find_matching(prices: list[dict], sub) -> list[dict]:
 def _build_key(matching: list[dict]) -> str:
     if not matching:
         return ""
-    parts = [f"{m['code']}:{m['price_ils']:.0f}" for m in matching]
+    parts = [f"{m['code']}:{m['price_ils']:.0f}:{m.get('count') or 0}" for m in matching]
     return ",".join(sorted(parts))
 
 
@@ -85,8 +85,8 @@ async def _send_alert(bot: Bot, chat_id: str, sub, perf: dict, matching: list[di
         "",
     ]
     for m in matching:
-        loc = f" ({m['blocks'][:50]})" if m["blocks"] else ""
-        lines.append(f"• {m['description']}{loc} — <b>{m['price_ils']:.0f} ₪</b>")
+        cnt  = f" · {m['count']} מקומות" if m.get("count") else ""
+        lines.append(f"• {m['description']} — <b>{m['price_ils']:.0f} ₪</b>{cnt}")
 
     max_label = f"עד {sub.max_price_ils:.0f} ₪" if sub.max_price_ils else "כל מחיר"
     lines += [
