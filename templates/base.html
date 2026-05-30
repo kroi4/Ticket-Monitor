@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}מעקב כרטיסי הופעות{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container header-inner">
+      <a href="/" class="brand">🎟️ Ticket Monitor</a>
+      <nav class="nav">
+        {% if user is defined and user %}
+          <span class="nav-user">👤 {{ user.name or user.email }}</span>
+          <a href="/dashboard" class="btn btn-ghost">לוח בקרה</a>
+          <a href="/logout" class="btn btn-ghost">יציאה</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  <main class="container main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <span>Ticket Monitor © 2026 · </span>
+      <a href="https://t.me/ticket_monitorBOT" target="_blank">@ticket_monitorBOT</a>
+    </div>
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Secrets & local config
+.env
+
+# Database & logs
+*.db
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Research / one-off scripts
+research*.py
+research*.txt
+main_bundle_head.txt
+ticket_monitor.py

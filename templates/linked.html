@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}טלגרם קושר בהצלחה{% endblock %}
+{% block content %}
+<div class="hero">
+  <div class="hero-content" style="max-width:480px">
+    <div style="font-size:4rem;margin-bottom:1rem">✅</div>
+    <h1>הטלגרם קושר בהצלחה!</h1>
+    <p>החשבון של <strong>{{ user.name or user.email }}</strong> מקושר עכשיו לטלגרם.</p>
+    <p class="text-muted">תוכל לנהל את ההתראות שלך גם מהאתר וגם מהבוט.</p>
+    <div class="cta-group">
+      <a href="/dashboard" class="btn btn-primary btn-lg">לוח בקרה</a>
+      <a href="https://t.me/ticket_monitorBOT" target="_blank" class="btn btn-tg btn-lg">פתח בטלגרם</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

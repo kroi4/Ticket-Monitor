@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}לוח בקרה — Ticket Monitor{% endblock %}
+{% block content %}
+<div class="dashboard">
+  <div class="dashboard-header">
+    <h1>📋 ההתראות שלי</h1>
+    <div class="dashboard-actions">
+      <a href="https://t.me/ticket_monitorBOT" target="_blank" class="btn btn-tg">
+        📲 הוסף התראה בטלגרם
+      </a>
+      <button class="btn btn-primary" id="btn-link-tg">
+        🔗 {% if user.telegram_chat_id %}טלגרם מקושר ✅{% else %}קשר טלגרם{% endif %}
+      </button>
+    </div>
+  </div>
+
+  {% if user.telegram_chat_id %}
+  <div class="alert alert-success">
+    ✅ הטלגרם שלך מקושר — @{{ user.telegram_username or user.telegram_chat_id }}
+  </div>
+  {% else %}
+  <div class="alert alert-info">
+    💡 קשר את חשבון הטלגרם שלך כדי לקבל התראות גם מהאתר.
+  </div>
+  {% endif %}
+
+  {% if subs %}
+  <table class="subs-table">
+    <thead>
+      <tr>
+        <th>הופעה</th>
+        <th>תאריך</th>
+        <th>כרטיס</th>
+        <th>מחיר מקסימלי</th>
+        <th>נוצר</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sub in subs %}
+      <tr id="row-{{ sub.id }}">
+        <td><strong>{{ sub.event_name or sub.event_code }}</strong></td>
+        <td>{{ sub.perf_date or "כל התאריכים" }}</td>
+        <td>{{ sub.ticket_desc or "כל הכרטיסים" }}</td>
+        <td>
+          {% if sub.max_price_ils %}
+            <span class="badge badge-price">עד {{ sub.max_price_ils | int }} ₪</span>
+          {% else %}
+            <span class="badge badge-any">כל מחיר</span>
+          {% endif %}
+        </td>
+        <td class="date-cell">{{ sub.created_at.strftime("%d/%m/%Y") if sub.created_at else "" }}</td>
+        <td>
+          <button class="btn btn-danger btn-sm" onclick="deleteSub({{ sub.id }})">🗑️</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">🎟️</div>
+    <h2>אין עדיין התראות</h2>
+    <p>פתח את הבוט בטלגרם ובחר הופעה לעקוב אחריה</p>
+    <a href="https://t.me/ticket_monitorBOT" target="_blank" class="btn btn-primary btn-lg">
+      📲 פתח בטלגרם
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Link Telegram Modal -->
+<div class="modal" id="modal-link" style="display:none">
+  <div class="modal-box">
+    <h2>🔗 קישור חשבון טלגרם</h2>
+    <p>לחץ על הכפתור כדי לפתוח קישור אחד בטלגרם ולאשר את החיבור:</p>
+    <div id="link-loading" style="display:none" class="text-muted">טוען…</div>
+    <a id="link-tg-url" href="#" target="_blank" class="btn btn-tg btn-lg" style="display:none">
+      📲 קשר עכשיו בטלגרם
+    </a>
+    <button class="btn btn-ghost mt-1" onclick="closeModal()">סגור</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function deleteSub(id) {
+  if (!confirm("למחוק התראה זו?")) return;
+  const r = await fetch(`/api/subscriptions/${id}`, { method: "DELETE" });
+  if (r.ok) {
+    document.getElementById(`row-${id}`)?.remove();
+  }
+}
+
+document.getElementById("btn-link-tg").addEventListener("click", async () => {
+  const modal = document.getElementById("modal-link");
+  modal.style.display = "flex";
+  const loading = document.getElementById("link-loading");
+  const linkBtn = document.getElementById("link-tg-url");
+  loading.style.display = "block";
+  linkBtn.style.display = "none";
+  try {
+    const r = await fetch("/link-telegram-token");
+    const data = await r.json();
+    loading.style.display = "none";
+    linkBtn.href = data.url;
+    linkBtn.style.display = "inline-flex";
+  } catch(e) {
+    loading.textContent = "שגיאה, נסה שוב";
+  }
+});
+
+function closeModal() {
+  document.getElementById("modal-link").style.display = "none";
+}
+</script>
+{% endblock %}
