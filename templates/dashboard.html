@@ -93,7 +93,7 @@
               {% if sub.created_at %}
               <div class="meta-row">
                 <span class="meta-icon">🕐</span>
-                <span class="text-muted">נוצר {{ sub.created_at.strftime("%d/%m/%Y") }}</span>
+                <span class="text-muted">נוצר {{ sub.created_at.strftime("%d/%m/%Y") }} ({{ sub.created_at.strftime("%d/%m/%Y") | dow_he }}) {{ sub.created_at.strftime("%H:%M") }}</span>
               </div>
               {% endif %}
             </div>
