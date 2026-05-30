@@ -56,11 +56,11 @@ async def main():
     scheduler.add_job(
         lambda: asyncio.create_task(run_monitor(application.bot)),
         "interval",
-        seconds=config.CHECK_INTERVAL_SECONDS,
+        seconds=60,
         id="monitor",
     )
     scheduler.start()
-    log.info("Monitor scheduler started (every %ds)", config.CHECK_INTERVAL_SECONDS)
+    log.info("Monitor scheduler started (every 60s)")
 
     log.info("=" * 55)
     log.info("🎟️  Ticket Monitor is running!")

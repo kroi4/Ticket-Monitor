@@ -1,79 +1,215 @@
 {% extends "base.html" %}
 {% block title %}לוח בקרה — Ticket Monitor{% endblock %}
+
 {% block content %}
-<div class="dashboard">
-  <div class="dashboard-header">
-    <h1>📋 ההתראות שלי</h1>
-    <div class="dashboard-actions">
-      <a href="https://t.me/ticket_monitorBOT" target="_blank" class="btn btn-tg">
-        📲 הוסף התראה בטלגרם
+<div class="db-wrap">
+
+  <!-- ── Stats bar ─────────────────────────────────────── -->
+  <div class="stats-bar">
+    <div class="stat">
+      <span class="stat-num">{{ enriched | length }}</span>
+      <span class="stat-label">מעקבים פעילים</span>
+    </div>
+    <div class="stat">
+      {% if user.telegram_chat_id %}
+        <span class="stat-num tg-ok">✅</span>
+        <span class="stat-label">טלגרם מקושר</span>
+      {% else %}
+        <span class="stat-num warn">⚠️</span>
+        <span class="stat-label">טלגרם לא מקושר</span>
+      {% endif %}
+    </div>
+    <div class="stat">
+      <span class="stat-num">{{ user.email }}</span>
+      <span class="stat-label">חשבון Google</span>
+    </div>
+    <div class="stat-actions">
+      <a href="https://t.me/ticket_monitorBOT" target="_blank" class="btn btn-tg btn-sm">
+        📲 הוסף מעקב
       </a>
-      <button class="btn btn-primary" id="btn-link-tg">
-        🔗 {% if user.telegram_chat_id %}טלגרם מקושר ✅{% else %}קשר טלגרם{% endif %}
-      </button>
+      {% if not user.telegram_chat_id %}
+      <button class="btn btn-primary btn-sm" id="btn-link-tg">🔗 קשר טלגרם</button>
+      {% endif %}
     </div>
   </div>
 
-  {% if user.telegram_chat_id %}
-  <div class="alert alert-success">
-    ✅ הטלגרם שלך מקושר — @{{ user.telegram_username or user.telegram_chat_id }}
-  </div>
-  {% else %}
-  <div class="alert alert-info">
-    💡 קשר את חשבון הטלגרם שלך כדי לקבל התראות גם מהאתר.
-  </div>
-  {% endif %}
+  <!-- ── Main grid ─────────────────────────────────────── -->
+  <div class="db-grid">
 
-  {% if subs %}
-  <table class="subs-table">
-    <thead>
-      <tr>
-        <th>הופעה</th>
-        <th>תאריך</th>
-        <th>כרטיס</th>
-        <th>מחיר מקסימלי</th>
-        <th>נוצר</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for sub in subs %}
-      <tr id="row-{{ sub.id }}">
-        <td><strong>{{ sub.event_name or sub.event_code }}</strong></td>
-        <td>{{ sub.perf_date or "כל התאריכים" }}</td>
-        <td>{{ sub.ticket_desc or "כל הכרטיסים" }}</td>
-        <td>
-          {% if sub.max_price_ils %}
-            <span class="badge badge-price">עד {{ sub.max_price_ils | int }} ₪</span>
-          {% else %}
-            <span class="badge badge-any">כל מחיר</span>
-          {% endif %}
-        </td>
-        <td class="date-cell">{{ sub.created_at.strftime("%d/%m/%Y") if sub.created_at else "" }}</td>
-        <td>
-          <button class="btn btn-danger btn-sm" onclick="deleteSub({{ sub.id }})">🗑️</button>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <div class="empty-state">
-    <div class="empty-icon">🎟️</div>
-    <h2>אין עדיין התראות</h2>
-    <p>פתח את הבוט בטלגרם ובחר הופעה לעקוב אחריה</p>
-    <a href="https://t.me/ticket_monitorBOT" target="_blank" class="btn btn-primary btn-lg">
-      📲 פתח בטלגרם
-    </a>
-  </div>
-  {% endif %}
-</div>
+    <!-- ── LEFT: Subscriptions ─────────────────────────── -->
+    <div class="db-main">
+      <h2 class="section-title">🎟️ המעקבים שלי</h2>
+
+      {% if enriched %}
+      <div class="cards-grid">
+        {% for item in enriched %}
+        {% set sub = item.sub %}
+        <div class="sub-card" id="card-{{ sub.id }}">
+
+          <!-- Image banner -->
+          <div class="card-img-wrap">
+            {% if item.image_url %}
+            <img src="{{ item.image_url }}" alt="{{ sub.event_name }}" class="card-img" loading="lazy">
+            {% else %}
+            <div class="card-img-placeholder">🎭</div>
+            {% endif %}
+            <!-- Source badge -->
+            <span class="source-badge tm-badge">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align:middle;margin-left:3px">
+                <circle cx="12" cy="12" r="12" fill="#026CDF"/>
+                <text x="12" y="16" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold" font-family="Arial">TM</text>
+              </svg>
+              {{ item.source }}
+            </span>
+          </div>
+
+          <!-- Card body -->
+          <div class="card-body">
+            <h3 class="card-title">{{ sub.event_name or sub.event_code }}</h3>
+
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-icon">📅</span>
+                <span>{{ sub.perf_date or "כל התאריכים" }}</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-icon">💰</span>
+                <span>
+                  {% if sub.max_price_ils and sub.ticket_desc %}
+                    {{ sub.ticket_desc }} ומטה
+                    <span class="price-badge">עד {{ sub.max_price_ils | int }} ₪</span>
+                  {% elif sub.max_price_ils %}
+                    <span class="price-badge">עד {{ sub.max_price_ils | int }} ₪</span>
+                  {% else %}
+                    <span class="price-badge any">כל מחיר</span>
+                  {% endif %}
+                </span>
+              </div>
+              {% if sub.created_at %}
+              <div class="meta-row">
+                <span class="meta-icon">🕐</span>
+                <span class="text-muted">נוצר {{ sub.created_at.strftime("%d/%m/%Y") }}</span>
+              </div>
+              {% endif %}
+            </div>
+
+            <button class="btn-delete" onclick="deleteSub({{ sub.id }})" title="מחק מעקב">
+              🗑️ מחק
+            </button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">🎟️</div>
+        <h2>אין עדיין מעקבים</h2>
+        <p>פתח את הבוט בטלגרם ובחר הופעה לעקוב אחריה</p>
+        <a href="https://t.me/ticket_monitorBOT" target="_blank" class="btn btn-primary btn-lg">
+          📲 פתח בטלגרם
+        </a>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- ── RIGHT: Settings ──────────────────────────────── -->
+    <aside class="db-sidebar">
+      <div class="settings-card">
+        <h2 class="section-title">⚙️ הגדרות</h2>
+
+        <!-- Notification toggles -->
+        <div class="setting-group">
+          <div class="setting-label">📣 ערוצי התראות</div>
+
+          <div class="toggle-row">
+            <label class="toggle-label" for="tog-tg">
+              <span class="toggle-icon">📱</span>
+              <span>הודעות טלגרם</span>
+              {% if not user.telegram_chat_id %}
+              <span class="hint-chip">דורש קישור</span>
+              {% endif %}
+            </label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="tog-tg" name="notify_telegram"
+                     {% if user.notify_telegram is not false %}checked{% endif %}
+                     {% if not user.telegram_chat_id %}disabled{% endif %}>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-row">
+            <label class="toggle-label" for="tog-email">
+              <span class="toggle-icon">📧</span>
+              <span>הודעות מייל</span>
+              <span class="hint-email">{{ user.email }}</span>
+            </label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="tog-email" name="notify_email"
+                     {% if user.notify_email is not false %}checked{% endif %}>
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Check interval -->
+        <div class="setting-group">
+          <div class="setting-label">⏱ תדירות בדיקה</div>
+          <div class="interval-grid">
+            {% set cur_interval = user.check_interval_seconds or 120 %}
+            {% for secs, label in [(60,"דקה"), (120,"2 דק׳"), (300,"5 דק׳"), (900,"15 דק׳")] %}
+            <button class="interval-btn {% if cur_interval == secs %}active{% endif %}"
+                    data-secs="{{ secs }}" onclick="setCheckInterval({{ secs }})">
+              {{ label }}
+            </button>
+            {% endfor %}
+          </div>
+          <p class="setting-hint">כל כמה זמן לבדוק אם נפתחו כרטיסים</p>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Account info -->
+        <div class="setting-group">
+          <div class="setting-label">👤 חשבון</div>
+          <div class="account-info">
+            <div class="account-row">
+              <span>📧</span>
+              <span>{{ user.email }}</span>
+            </div>
+            {% if user.telegram_chat_id %}
+            <div class="account-row">
+              <span>📱</span>
+              <span>
+                {% if user.telegram_username %}@{{ user.telegram_username }}{% else %}מקושר{% endif %}
+                <span class="ok-chip">✅</span>
+              </span>
+            </div>
+            {% else %}
+            <button class="btn btn-tg btn-sm w-full mt-sm" id="btn-link-tg2">
+              🔗 קשר חשבון טלגרם
+            </button>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Logout -->
+        <a href="/logout" class="btn btn-ghost btn-sm w-full">🚪 התנתק</a>
+      </div>
+    </aside>
+
+  </div><!-- /db-grid -->
+</div><!-- /db-wrap -->
 
 <!-- Link Telegram Modal -->
 <div class="modal" id="modal-link" style="display:none">
   <div class="modal-box">
     <h2>🔗 קישור חשבון טלגרם</h2>
-    <p>לחץ על הכפתור כדי לפתוח קישור אחד בטלגרם ולאשר את החיבור:</p>
+    <p>לחץ על הכפתור כדי לפתוח קישור בטלגרם ולאשר את החיבור:</p>
     <div id="link-loading" style="display:none" class="text-muted">טוען…</div>
     <a id="link-tg-url" href="#" target="_blank" class="btn btn-tg btn-lg" style="display:none">
       📲 קשר עכשיו בטלגרם
@@ -85,34 +221,54 @@
 
 {% block scripts %}
 <script>
+/* ── Delete subscription ─────────────────────────────── */
 async function deleteSub(id) {
-  if (!confirm("למחוק התראה זו?")) return;
+  if (!confirm("למחוק מעקב זה?")) return;
   const r = await fetch(`/api/subscriptions/${id}`, { method: "DELETE" });
-  if (r.ok) {
-    document.getElementById(`row-${id}`)?.remove();
-  }
+  if (r.ok) document.getElementById(`card-${id}`)?.remove();
 }
 
-document.getElementById("btn-link-tg").addEventListener("click", async () => {
-  const modal = document.getElementById("modal-link");
-  modal.style.display = "flex";
+/* ── Notification toggles ────────────────────────────── */
+async function saveSetting(key, value) {
+  await fetch("/api/settings", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ [key]: value }),
+  });
+}
+
+document.getElementById("tog-tg")?.addEventListener("change", e =>
+  saveSetting("notify_telegram", e.target.checked));
+document.getElementById("tog-email")?.addEventListener("change", e =>
+  saveSetting("notify_email", e.target.checked));
+
+/* ── Interval selector ───────────────────────────────── */
+function setCheckInterval(secs) {
+  document.querySelectorAll(".interval-btn").forEach(b => b.classList.remove("active"));
+  document.querySelector(`.interval-btn[data-secs="${secs}"]`)?.classList.add("active");
+  saveSetting("check_interval_seconds", secs);
+}
+
+/* ── Link Telegram modal ─────────────────────────────── */
+async function openLinkModal() {
+  document.getElementById("modal-link").style.display = "flex";
   const loading = document.getElementById("link-loading");
   const linkBtn = document.getElementById("link-tg-url");
   loading.style.display = "block";
   linkBtn.style.display = "none";
   try {
-    const r = await fetch("/link-telegram-token");
+    const r    = await fetch("/link-telegram-token");
     const data = await r.json();
     loading.style.display = "none";
-    linkBtn.href = data.url;
+    linkBtn.href          = data.url;
     linkBtn.style.display = "inline-flex";
-  } catch(e) {
-    loading.textContent = "שגיאה, נסה שוב";
-  }
-});
-
+  } catch(e) { loading.textContent = "שגיאה, נסה שוב"; }
+}
 function closeModal() {
   document.getElementById("modal-link").style.display = "none";
 }
+
+document.getElementById("btn-link-tg")  ?.addEventListener("click", openLinkModal);
+document.getElementById("btn-link-tg2") ?.addEventListener("click", openLinkModal);
 </script>
 {% endblock %}

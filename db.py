@@ -23,6 +23,9 @@ class User(Base):
     google_id         = Column(String, unique=True)
     telegram_chat_id  = Column(String, unique=True)
     telegram_username = Column(String)
+    notify_telegram       = Column(Boolean, default=True)
+    notify_email          = Column(Boolean, default=True)
+    check_interval_seconds = Column(Integer, nullable=True)
     created_at        = Column(DateTime, default=utcnow)
     subscriptions     = relationship("Subscription", back_populates="user",
                                      foreign_keys="Subscription.user_id")
@@ -71,6 +74,18 @@ class LinkToken(Base):
 
 def init_db():
     Base.metadata.create_all(engine)
+    from sqlalchemy import text, inspect as sa_inspect2
+    with engine.connect() as conn:
+        existing = [c["name"] for c in sa_inspect2(engine).get_columns("users")]
+        migrations = {
+            "notify_telegram":        "INTEGER NOT NULL DEFAULT 1",
+            "notify_email":           "INTEGER NOT NULL DEFAULT 1",
+            "check_interval_seconds": "INTEGER",
+        }
+        for col, defn in migrations.items():
+            if col not in existing:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {defn}"))
+        conn.commit()
 
 
 # ── CRUD helpers ──────────────────────────────────────────
@@ -258,6 +273,18 @@ def set_pinned_message_id(chat_id: str, message_id: int | None):
             row.pinned_message_id = message_id
         else:
             s.add(ChatSettings(chat_id=chat_id, pinned_message_id=message_id))
+        s.commit()
+
+
+def update_user_settings(user_id: int, **kwargs):
+    allowed = {"notify_telegram", "notify_email", "check_interval_seconds"}
+    with Session() as s:
+        u = s.query(User).filter_by(id=user_id).first()
+        if not u:
+            return
+        for k, v in kwargs.items():
+            if k in allowed:
+                setattr(u, k, v)
         s.commit()
 
 

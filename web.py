@@ -94,12 +94,30 @@ async def dashboard(request: Request):
     user = current_user(request)
     if not user:
         return RedirectResponse("/")
+    # Re-fetch user to get fresh settings columns
+    user = db.get_user(user.id)
     subs = db.get_subscriptions_for_user(user.id)
+
+    # Build event image lookup from TM API
+    import tm_api
+    events_list = tm_api.get_all_events()
+    event_meta  = {e["event_code"]: e for e in events_list}
+
+    # Enrich subscriptions with image + source info
+    enriched = []
+    for sub in subs:
+        meta = event_meta.get(sub.event_code, {})
+        enriched.append({
+            "sub":       sub,
+            "image_url": meta.get("image_url", ""),
+            "source":    "Ticketmaster",
+        })
+
     return templates.TemplateResponse("dashboard.html", {
-        "request": request,
-        "user":    user,
-        "subs":    subs,
-        "web_base": config.WEB_BASE_URL,
+        "request":    request,
+        "user":       user,
+        "enriched":   enriched,
+        "web_base":   config.WEB_BASE_URL,
     })
 
 
@@ -142,4 +160,17 @@ async def delete_subscription(request: Request, sub_id: int):
     deleted = db.delete_subscription(sub_id, owner_user_id=user.id)
     if not deleted:
         return JSONResponse({"error": "not_found"}, status_code=404)
+    return JSONResponse({"ok": True})
+
+
+@app.patch("/api/settings")
+async def update_settings(request: Request):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"error": "not_logged_in"}, status_code=401)
+    body = await request.json()
+    allowed = {"notify_telegram", "notify_email", "check_interval_seconds"}
+    kwargs = {k: v for k, v in body.items() if k in allowed}
+    if kwargs:
+        db.update_user_settings(user.id, **kwargs)
     return JSONResponse({"ok": True})
