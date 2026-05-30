@@ -10,6 +10,7 @@ from telegram.error import TelegramError
 import config
 import db
 import tm_api
+import mailer
 
 log = logging.getLogger(__name__)
 
@@ -333,8 +334,13 @@ async def _create_sub(update: Update, context: ContextTypes.DEFAULT_TYPE,
     context.user_data.pop("pending", None)
     context.user_data.pop("awaiting_price", None)
 
-    # Update / create the pinned summary message
     await update_pinned_summary(context.bot, chat_id)
+
+    # Email confirmation if user has a linked Google account
+    email = db.get_email_for_sub(sub)
+    if email:
+        all_subs = db.get_subscriptions_for_chat(chat_id)
+        await mailer.send_subscription_confirmed(email, sub, all_subs)
 
 
 # ── My alerts ────────────────────────────────────────────

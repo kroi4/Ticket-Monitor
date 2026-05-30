@@ -196,6 +196,18 @@ def get_subscriptions_for_user(user_id: int) -> list[Subscription]:
         return [_detach(s2) for s2 in subs]
 
 
+def get_email_for_sub(sub) -> str | None:
+    """Return the Google-linked email address for a subscription owner, if available."""
+    with Session() as s:
+        if sub.user_id:
+            u = s.query(User).filter_by(id=sub.user_id).first()
+            return u.email if u else None
+        if sub.telegram_chat_id:
+            u = s.query(User).filter_by(telegram_chat_id=sub.telegram_chat_id).first()
+            return u.email if u else None
+    return None
+
+
 def get_all_active_subscriptions() -> list[Subscription]:
     with Session() as s:
         return [_detach(sub) for sub in s.query(Subscription).filter_by(active=True).all()]

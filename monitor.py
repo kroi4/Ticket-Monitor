@@ -4,6 +4,7 @@ import asyncio
 from telegram import Bot
 import db
 import tm_api
+import mailer
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +48,11 @@ async def _check_event(bot: Bot, event_code: str, subs: list):
             if alert_key and alert_key != sub.last_alert_key:
                 chat_id = sub.effective_chat_id()
                 if chat_id:
+                    event_detail = tm_api.get_event_detail(event_code)
                     await _send_alert(bot, chat_id, sub, perf, matching)
+                    email = db.get_email_for_sub(sub)
+                    if email:
+                        await mailer.send_ticket_alert(email, sub, perf, matching, event_detail)
                     db.update_alert_key(sub.id, alert_key)
             elif not alert_key and sub.last_alert_key:
                 # Tickets gone → reset so we can notify again when they return

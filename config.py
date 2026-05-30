@@ -14,6 +14,12 @@ WEB_PORT                = int(os.getenv("WEB_PORT", "8000"))
 WEB_BASE_URL            = os.getenv("WEB_BASE_URL", "http://localhost:8000")
 CHECK_INTERVAL_SECONDS  = int(os.getenv("CHECK_INTERVAL_SECONDS", "120"))
 
+SMTP_HOST     = os.getenv("SMTP_HOST", "")
+SMTP_PORT     = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER     = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM     = os.getenv("SMTP_FROM", "")
+
 TM_BASE    = "https://www.ticketmaster.co.il/wbtxapi/api/v1/bxcached/event"
 TM_CHANNEL = "INTERNET"
 TM_LANG    = "iw"
