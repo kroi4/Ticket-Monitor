@@ -23,9 +23,9 @@ def _build_summary_text(subs: list) -> str:
     lines = ["📋 <b>ההתראות הפעילות שלך:</b>\n"]
     for sub in subs:
         if sub.max_price_ils and sub.ticket_desc:
-            price = f"{sub.ticket_desc} ומטה (עד {sub.max_price_ils:.0f} ₪)"
+            price = f"{sub.ticket_desc} ומטה (עד {sub.max_price_ils:.0f}₪)"
         elif sub.max_price_ils:
-            price = f"עד {sub.max_price_ils:.0f} ₪"
+            price = f"עד {sub.max_price_ils:.0f}₪"
         else:
             price = "כל המחירים"
         if sub.perf_date:
@@ -274,9 +274,9 @@ async def _show_tickets(update: Update, context: ContextTypes.DEFAULT_TYPE,
             and abs(p["price_ils"] - existing_sub.max_price_ils) < 0.5
         )
         if available:
-            label = f"{p['description']} ({p['price_ils']:.0f} ₪)"
+            label = f"{p['description']} ({p['price_ils']:.0f}₪)"
         else:
-            label = f"{p['description']} 🔴 אזל ({p['price_ils']:.0f} ₪)"
+            label = f"{p['description']} 🔴 אזל ({p['price_ils']:.0f}₪)"
         if is_selected:
             label = "✅ " + label
         keyboard.append([InlineKeyboardButton(
@@ -344,9 +344,9 @@ async def _create_sub(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
     if max_price:
         if ticket_desc:
-            price_label = f"{ticket_desc} ומטה (עד {max_price:.0f} ₪)"
+            price_label = f"{ticket_desc} ומטה (עד {max_price:.0f}₪)"
         else:
-            price_label = f"עד {max_price:.0f} ₪"
+            price_label = f"עד {max_price:.0f}₪"
     else:
         price_label = "כל המחירים"
 
@@ -398,7 +398,7 @@ async def _show_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if subs:
         lines = ["📋 <b>ההתראות הפעילות שלך:</b>\n"]
         for sub in subs:
-            price_label  = f"עד {sub.max_price_ils:.0f} ₪" if sub.max_price_ils else "כל מחיר"
+            price_label  = f"עד {sub.max_price_ils:.0f}₪" if sub.max_price_ils else "כל מחיר"
             ticket_label = sub.ticket_desc or "כל הכרטיסים"
             if sub.perf_date:
                 dow        = tm_api.dow_he(sub.perf_date)

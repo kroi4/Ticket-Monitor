@@ -152,9 +152,9 @@ async def _send_alert(bot: Bot, chat_id: str, sub, perf: dict, matching: list[di
         "",
     ]
     for m in matching:
-        lines.append(f"• {m['description']} — <b>{m['price_ils']:.0f} ₪</b>")
+        lines.append(f"• {m['description']} — <b>{m['price_ils']:.0f}₪</b>")
 
-    max_label = f"עד {sub.max_price_ils:.0f} ₪" if sub.max_price_ils else "כל מחיר"
+    max_label = f"עד {sub.max_price_ils:.0f}₪" if sub.max_price_ils else "כל מחיר"
     lines += [
         "",
         f"<i>פילטר: {max_label}</i>",

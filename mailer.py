@@ -35,12 +35,12 @@ def _wrap(content: str, title: str) -> str:
 </style>
 </head>
 <body style="margin:0;padding:0;background:#f2f4f8;">
-<table class="email-outer" width="100%" cellpadding="0" cellspacing="0"
+<table class="email-outer" width="100%" cellpadding="0" cellspacing="0" dir="rtl"
        style="background:#f2f4f8;padding:32px 0;">
 <tr><td align="center">
 
 <!-- Card -->
-<table class="email-inner" cellpadding="0" cellspacing="0"
+<table class="email-inner" cellpadding="0" cellspacing="0" dir="rtl"
        style="width:100%;max-width:560px;background:#ffffff;
               border-radius:10px;overflow:hidden;
               box-shadow:0 4px 16px rgba(0,0,0,.10);">
@@ -77,11 +77,11 @@ def _wrap(content: str, title: str) -> str:
 
 def _section(title: str, body: str, color: str = "#f7f8fb") -> str:
     return f"""
-<table width="100%" cellpadding="0" cellspacing="0"
+<table width="100%" cellpadding="0" cellspacing="0" dir="rtl"
        style="background:{color};border-radius:8px;margin-bottom:14px;">
-<tr><td style="padding:14px 18px;">
+<tr><td style="padding:14px 18px;text-align:right;">
   <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:10px;
-              text-transform:uppercase;letter-spacing:.5px;">{title}</div>
+              letter-spacing:.5px;">{title}</div>
   {body}
 </td></tr>
 </table>"""
@@ -90,13 +90,13 @@ def _section(title: str, body: str, color: str = "#f7f8fb") -> str:
 def _row(label: str, value: str) -> str:
     """One label/value detail row — table-based so it works in Gmail."""
     return f"""
-<table width="100%" cellpadding="0" cellspacing="0"
+<table width="100%" cellpadding="0" cellspacing="0" dir="rtl"
        style="border-bottom:1px solid #eaecf0;">
 <tr>
   <td style="padding:6px 0;font-size:13px;color:#9ea4b0;
              width:38%;text-align:right;">{label}</td>
   <td style="padding:6px 4px;font-size:13px;color:#1a1f2e;
-             font-weight:600;text-align:left;">{value}</td>
+             font-weight:600;text-align:right;">{value}</td>
 </tr>
 </table>"""
 
@@ -124,9 +124,9 @@ def _button(label: str, url: str, bg: str = "#e53935") -> str:
 
 def _sub_confirmed_html(sub, all_subs: list) -> str:
     price_label = (
-        f"{sub.ticket_desc} ומטה (עד {sub.max_price_ils:.0f} ₪)"
+        f"{sub.ticket_desc} ומטה (עד {sub.max_price_ils:.0f}₪)"
         if sub.max_price_ils and sub.ticket_desc
-        else f"עד {sub.max_price_ils:.0f} ₪"
+        else f"עד {sub.max_price_ils:.0f}₪"
         if sub.max_price_ils
         else "כל המחירים"
     )
@@ -141,14 +141,14 @@ def _sub_confirmed_html(sub, all_subs: list) -> str:
 
     subs_rows = ""
     for s in all_subs:
-        pl = (f"עד {s.max_price_ils:.0f} ₪" if s.max_price_ils else "כל המחירים")
+        pl = (f"עד {s.max_price_ils:.0f}₪" if s.max_price_ils else "כל המחירים")
         subs_rows += _row(
             s.event_name or s.event_code,
             f"{s.perf_date or 'כל תאריכים'} &nbsp;·&nbsp; {pl}"
         )
     active_block = _section("📋 כל המעקבים הפעילים שלך", subs_rows) if subs_rows else ""
 
-    intro = '<p style="font-size:15px;color:#333;margin:0 0 18px;">המעקב הבא הוגדר בהצלחה:</p>'
+    intro = '<p style="font-size:15px;color:#333;margin:0 0 18px;text-align:right;">המעקב הבא הוגדר בהצלחה:</p>'
     return _wrap(intro + new_block + active_block, "מעקב הוגדר")
 
 
@@ -164,8 +164,8 @@ def _alert_html(sub, perf: dict, matching: list[dict], event_detail: dict | None
                   f"📍 {venue_name}</span>") if venue_name else ""
 
     header = f"""
-<h2 style="margin:0 0 8px;font-size:20px;color:#1a1f2e;">{event_name}</h2>
-<div style="margin-bottom:18px;font-size:14px;color:#555;">
+<h2 style="margin:0 0 8px;font-size:20px;color:#1a1f2e;text-align:right;">{event_name}</h2>
+<div style="margin-bottom:18px;font-size:14px;color:#555;text-align:right;">
   📅 {date_str}{venue_html}
   &nbsp;&nbsp;{_badge(f"{emoji} {status_text}")}
 </div>"""
@@ -175,28 +175,28 @@ def _alert_html(sub, perf: dict, matching: list[dict], event_detail: dict | None
         ticket_rows += f"""
 <tr>
   <td style="padding:10px 12px;font-size:14px;color:#1a1f2e;
-             border-bottom:1px solid #eaecf0;">{m['description']}</td>
-  <td style="padding:10px 12px;font-size:14px;text-align:center;
+             text-align:right;border-bottom:1px solid #eaecf0;">{m['description']}</td>
+  <td style="padding:10px 12px;font-size:14px;text-align:right;
              border-bottom:1px solid #eaecf0;white-space:nowrap;">
-    <b style="color:#e53935;">{m['price_ils']:.0f} ₪</b>
+    <b style="color:#e53935;">{m['price_ils']:.0f}₪</b>
   </td>
 </tr>"""
 
     tickets_table = f"""
-<table width="100%" cellpadding="0" cellspacing="0"
+<table width="100%" cellpadding="0" cellspacing="0" dir="rtl"
        style="border:1px solid #eaecf0;border-radius:8px;
               overflow:hidden;margin-bottom:8px;">
   <tr style="background:#f7f8fb;">
     <th style="padding:10px 12px;font-size:12px;color:#777;
                font-weight:700;text-align:right;">סוג כרטיס</th>
     <th style="padding:10px 12px;font-size:12px;color:#777;
-               font-weight:700;text-align:center;">מחיר</th>
+               font-weight:700;text-align:right;">מחיר</th>
   </tr>
   {ticket_rows}
 </table>"""
 
-    max_label   = f"עד {sub.max_price_ils:.0f} ₪" if sub.max_price_ils else "כל מחיר"
-    filter_note = (f'<p style="font-size:12px;color:#9ea4b0;margin:4px 0 0;">'
+    max_label   = f"עד {sub.max_price_ils:.0f}₪" if sub.max_price_ils else "כל מחיר"
+    filter_note = (f'<p style="font-size:12px;color:#9ea4b0;margin:4px 0 0;text-align:right;">'
                    f'פילטר שהוגדר: {max_label}</p>')
 
     btn = _button("🛒 לרכישת כרטיסים", buy_url)

@@ -82,9 +82,9 @@
                 <span>
                   {% if sub.max_price_ils and sub.ticket_desc %}
                     {{ sub.ticket_desc }} ומטה
-                    <span class="price-badge">עד {{ sub.max_price_ils | int }} ₪</span>
+                    <span class="price-badge">עד {{ sub.max_price_ils | int }}₪</span>
                   {% elif sub.max_price_ils %}
-                    <span class="price-badge">עד {{ sub.max_price_ils | int }} ₪</span>
+                    <span class="price-badge">עד {{ sub.max_price_ils | int }}₪</span>
                   {% else %}
                     <span class="price-badge any">כל מחיר</span>
                   {% endif %}
@@ -391,7 +391,7 @@ function renderHistory(panel, events, createdAt) {
     const dur      = ev.end_time ? ` <span class="tl-dur">(${_fmtDur(ev.created_at, ev.end_time)})</span>` : '';
 
     const tickets = isAvail && ev.tickets.length
-      ? ev.tickets.map(t => `<div class="tl-ticket">• ${t.description} — ${Math.round(t.price_ils)} ₪</div>`).join('')
+      ? ev.tickets.map(t => `<div class="tl-ticket">• ${t.description} — ${Math.round(t.price_ils)}₪</div>`).join('')
       : '<div class="tl-ticket tl-none">אין כרטיסים זמינים</div>';
 
     return `<div class="tl-event ${isAvail ? 'tl-avail' : 'tl-unavail'}">
