@@ -72,6 +72,23 @@ class LinkToken(Base):
     used       = Column(Boolean, default=False)
 
 
+class AlertEvent(Base):
+    __tablename__ = "alert_events"
+    id               = Column(Integer, primary_key=True)
+    sub_id           = Column(Integer, nullable=True)   # intentionally no FK — survives sub deletion
+    user_id          = Column(Integer, nullable=True)
+    telegram_chat_id = Column(String,  nullable=True)
+    event_code       = Column(String,  nullable=False)
+    event_name       = Column(String)
+    perf_code        = Column(String)
+    perf_date        = Column(String)
+    status           = Column(String,  nullable=False)  # "available" | "unavailable"
+    ticket_summary   = Column(Text,    nullable=True)   # JSON list of {description, price_ils}
+    price_min        = Column(Float,   nullable=True)
+    price_max        = Column(Float,   nullable=True)
+    created_at       = Column(DateTime, default=utcnow)
+
+
 def init_db():
     Base.metadata.create_all(engine)
     from sqlalchemy import text, inspect as sa_inspect2
@@ -320,6 +337,72 @@ def update_user_settings(user_id: int, **kwargs):
             if k in allowed:
                 setattr(u, k, v)
         s.commit()
+
+
+def get_subscription(sub_id: int) -> Subscription | None:
+    with Session() as s:
+        sub = s.query(Subscription).filter_by(id=sub_id).first()
+        return _detach(sub) if sub else None
+
+
+def log_alert_event(sub, status: str, matching: list[dict], perf: dict | None = None):
+    import json as _json
+    summary  = _json.dumps(
+        [{"description": m["description"], "price_ils": m["price_ils"]} for m in matching],
+        ensure_ascii=False,
+    ) if matching else None
+    price_min = min(m["price_ils"] for m in matching) if matching else None
+    price_max = max(m["price_ils"] for m in matching) if matching else None
+    chat_id   = sub.telegram_chat_id
+    if not chat_id:
+        try:
+            if sub.user:
+                chat_id = sub.user.telegram_chat_id
+        except Exception:
+            pass
+    with Session() as s:
+        ev = AlertEvent(
+            sub_id           = sub.id,
+            user_id          = sub.user_id,
+            telegram_chat_id = chat_id,
+            event_code       = sub.event_code,
+            event_name       = sub.event_name,
+            perf_code        = perf["perf_code"] if perf else sub.perf_code,
+            perf_date        = perf["date_str"]  if perf else sub.perf_date,
+            status           = status,
+            ticket_summary   = summary,
+            price_min        = price_min,
+            price_max        = price_max,
+        )
+        s.add(ev)
+        s.commit()
+
+
+def get_alert_history(sub_id: int, limit: int = 200) -> list[dict]:
+    import json as _json
+    with Session() as s:
+        events = (
+            s.query(AlertEvent)
+            .filter_by(sub_id=sub_id)
+            .order_by(AlertEvent.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        result = []
+        for i, ev in enumerate(events):
+            tickets = _json.loads(ev.ticket_summary) if ev.ticket_summary else []
+            end_ts  = events[i - 1].created_at.isoformat() + "Z" if i > 0 else None
+            result.append({
+                "id":         ev.id,
+                "status":     ev.status,
+                "tickets":    tickets,
+                "price_min":  ev.price_min,
+                "price_max":  ev.price_max,
+                "created_at": ev.created_at.isoformat() + "Z",
+                "end_time":   end_ts,
+                "perf_date":  ev.perf_date,
+            })
+        return result
 
 
 def _detach(obj):

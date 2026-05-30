@@ -167,6 +167,22 @@ async def delete_subscription(request: Request, sub_id: int):
     return JSONResponse({"ok": True})
 
 
+@app.get("/api/subscriptions/{sub_id}/history")
+async def subscription_history(request: Request, sub_id: int):
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"error": "not_logged_in"}, status_code=401)
+    sub = db.get_subscription(sub_id)
+    if not sub:
+        return JSONResponse({"error": "not_found"}, status_code=404)
+    owns = (sub.user_id == user.id) or bool(
+        user.telegram_chat_id and sub.telegram_chat_id == user.telegram_chat_id
+    )
+    if not owns:
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    return JSONResponse({"history": db.get_alert_history(sub_id)})
+
+
 @app.patch("/api/settings")
 async def update_settings(request: Request):
     user = current_user(request)

@@ -93,10 +93,20 @@
               {% endif %}
             </div>
 
-            <button class="btn-delete" onclick="deleteSub({{ sub.id }})" title="מחק מעקב">
-              🗑️ מחק
-            </button>
+            <div class="card-actions">
+              <button class="btn-history" id="hist-btn-{{ sub.id }}"
+                      onclick="toggleHistory({{ sub.id }}, '{{ sub.created_at.strftime('%Y-%m-%dT%H:%M:%SZ') if sub.created_at else '' }}')">
+                📈 היסטוריה
+              </button>
+              <button class="btn-delete" onclick="deleteSub({{ sub.id }})" title="מחק מעקב">
+                🗑️ מחק
+              </button>
+            </div>
           </div>
+
+          <!-- History panel (lazy-loaded) -->
+          <div class="history-panel" id="hist-{{ sub.id }}" style="display:none"></div>
+
         </div>
         {% endfor %}
       </div>
@@ -270,5 +280,125 @@ function closeModal() {
 
 document.getElementById("btn-link-tg")  ?.addEventListener("click", openLinkModal);
 document.getElementById("btn-link-tg2") ?.addEventListener("click", openLinkModal);
+
+/* ── Alert history ───────────────────────────────────── */
+const histCache = {};
+
+async function toggleHistory(subId, createdAt) {
+  const panel = document.getElementById(`hist-${subId}`);
+  const btn   = document.getElementById(`hist-btn-${subId}`);
+  if (!panel) return;
+
+  if (panel.style.display !== 'none') {
+    panel.style.display = 'none';
+    btn?.classList.remove('active');
+    return;
+  }
+
+  panel.style.display = 'block';
+  btn?.classList.add('active');
+
+  if (histCache[subId] !== undefined) {
+    renderHistory(panel, histCache[subId], createdAt);
+    return;
+  }
+
+  panel.innerHTML = '<div class="hist-msg">טוען היסטוריה…</div>';
+  try {
+    const r = await fetch(`/api/subscriptions/${subId}/history`);
+    const d = await r.json();
+    histCache[subId] = d.history || [];
+  } catch {
+    panel.innerHTML = '<div class="hist-msg hist-error">שגיאה בטעינה</div>';
+    return;
+  }
+  renderHistory(panel, histCache[subId], createdAt);
+}
+
+function _fmtDt(iso) {
+  const d   = new Date(iso);
+  const now = new Date();
+  const same = (a, b) => a.getFullYear() === b.getFullYear() &&
+                          a.getMonth()    === b.getMonth()    &&
+                          a.getDate()     === b.getDate();
+  const yest = new Date(now); yest.setDate(yest.getDate() - 1);
+  const t = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+  if (same(d, now))  return t;
+  if (same(d, yest)) return `אתמול ${t}`;
+  return d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }) + ' ' + t;
+}
+
+function _fmtDur(startIso, endIso) {
+  const ms   = new Date(endIso) - new Date(startIso);
+  const mins = Math.round(ms / 60000);
+  if (mins < 1)  return 'כרגע';
+  if (mins < 60) return `${mins} דק׳`;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return m ? `${h}ש׳ ${m}ד׳` : `${h}ש׳`;
+}
+
+function _buildBar(events, subCreatedIso) {
+  const now      = Date.now();
+  const subStart = new Date(subCreatedIso || 0).getTime();
+  const barStart = Math.max(now - 7 * 864e5, subStart);
+  const total    = now - barStart;
+  if (total <= 0) return '';
+
+  const sorted = [...events].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const before = sorted.filter(e => new Date(e.created_at).getTime() <= barStart);
+  let state  = before.length ? before[before.length - 1].status : 'unavailable';
+  const inBar = sorted.filter(e => new Date(e.created_at).getTime() > barStart);
+
+  const segs = [];
+  let cursor = barStart;
+  for (const ev of inBar) {
+    const t = new Date(ev.created_at).getTime();
+    if (t > cursor) segs.push({ s: state, d: t - cursor });
+    state  = ev.status;
+    cursor = t;
+  }
+  segs.push({ s: state, d: now - cursor });
+
+  const bars = segs.map(({ s, d }) => {
+    const pct = Math.max(d / total * 100, 0.4).toFixed(2);
+    return `<div class="bar-seg ${s === 'available' ? 'bar-avail' : 'bar-unavail'}"
+                 style="flex:${pct} 0 0" title="${s === 'available' ? 'זמין' : 'לא זמין'}"></div>`;
+  }).join('');
+
+  const startLbl = new Date(barStart).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' });
+  return `<div class="avail-bar-wrap">
+    <div class="avail-bar-track">${bars}</div>
+    <div class="avail-bar-scale"><span>${startLbl}</span><span>עכשיו</span></div>
+  </div>`;
+}
+
+function renderHistory(panel, events, createdAt) {
+  if (!events.length) {
+    panel.innerHTML = '<div class="hist-msg">אין שינויי זמינות מתועדים עדיין</div>';
+    return;
+  }
+
+  const bar  = _buildBar(events, createdAt);
+  const rows = events.map(ev => {
+    const isAvail  = ev.status === 'available';
+    const startFmt = _fmtDt(ev.created_at);
+    const endFmt   = ev.end_time ? _fmtDt(ev.end_time) : 'עכשיו';
+    const dur      = ev.end_time ? ` <span class="tl-dur">(${_fmtDur(ev.created_at, ev.end_time)})</span>` : '';
+
+    const tickets = isAvail && ev.tickets.length
+      ? ev.tickets.map(t => `<div class="tl-ticket">• ${t.description} — ${Math.round(t.price_ils)} ₪</div>`).join('')
+      : '<div class="tl-ticket tl-none">אין כרטיסים זמינים</div>';
+
+    return `<div class="tl-event ${isAvail ? 'tl-avail' : 'tl-unavail'}">
+      <div class="tl-dot">${isAvail ? '🟢' : '🔴'}</div>
+      <div class="tl-body">
+        <div class="tl-time">${startFmt} → ${endFmt}${dur}</div>
+        <div class="tl-tickets">${tickets}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  panel.innerHTML = `${bar}<div class="tl-list">${rows}</div>`;
+}
 </script>
 {% endblock %}

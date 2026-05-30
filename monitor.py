@@ -10,7 +10,8 @@ import mailer
 
 log = logging.getLogger(__name__)
 
-_last_checked: dict[int, float] = {}  # sub_id → unix timestamp of last check
+_last_checked: dict[int, float] = {}   # sub_id → unix timestamp of last check
+_fetch_error_notified: set[str] = set()  # event_codes already notified for fetch failures
 
 
 async def run_monitor(bot: Bot):
@@ -33,6 +34,17 @@ async def run_monitor(bot: Bot):
 
 async def _check_event(bot: Bot, event_code: str, subs: list):
     performances = tm_api.get_performances(event_code)
+
+    if not performances:
+        perf_path  = f"getPerformanceList/{event_code}/{config.TM_CHANNEL}/{config.TM_LANG}"
+        fail_count = tm_api.get_error_count(perf_path)
+        if fail_count >= 3 and event_code not in _fetch_error_notified:
+            _fetch_error_notified.add(event_code)
+            await _notify_fetch_error(bot, event_code, subs)
+            log.warning("Fetch failures for event %s: %d consecutive", event_code, fail_count)
+        return
+
+    _fetch_error_notified.discard(event_code)
     perf_map = {p["perf_code"]: p for p in performances}
 
     for sub in subs:
@@ -55,12 +67,12 @@ async def _check_event(bot: Bot, event_code: str, subs: list):
         for perf in target_perfs:
             if perf["is_soldout"]:
                 continue
-            prices   = tm_api.get_prices(event_code, perf["perf_code"])
-            matching = _find_matching(prices, sub)
+            prices    = tm_api.get_prices(event_code, perf["perf_code"])
+            matching  = _find_matching(prices, sub)
             alert_key = _build_key(matching)
 
             if alert_key and alert_key != sub.last_alert_key:
-                chat_id = sub.effective_chat_id()
+                chat_id      = sub.effective_chat_id()
                 event_detail = tm_api.get_event_detail(event_code)
 
                 # Telegram notification
@@ -75,9 +87,36 @@ async def _check_event(bot: Bot, event_code: str, subs: list):
                     if email:
                         await mailer.send_ticket_alert(email, sub, perf, matching, event_detail)
 
+                db.log_alert_event(sub, "available", matching, perf)
                 db.update_alert_key(sub.id, alert_key)
+
             elif not alert_key and sub.last_alert_key:
+                db.log_alert_event(sub, "unavailable", [], perf)
                 db.update_alert_key(sub.id, "")
+
+
+async def _notify_fetch_error(bot: Bot, event_code: str, subs: list):
+    """Notify subscribed users that repeated API calls are failing for an event."""
+    event_name = next((s.event_name for s in subs if s.event_name), event_code)
+    notified: set[str] = set()
+    for sub in subs:
+        chat_id = sub.effective_chat_id()
+        if chat_id and chat_id not in notified:
+            notified.add(chat_id)
+            try:
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=(
+                        f"⚠️ <b>שגיאה בקבלת נתונים</b>\n\n"
+                        f"לא ניתן לקבל מידע מ-Ticketmaster עבור:\n"
+                        f"🎭 <b>{event_name}</b>\n\n"
+                        f"נמשיך לנסות אוטומטית. "
+                        f"מומלץ לבדוק גם ישירות באתר Ticketmaster."
+                    ),
+                    parse_mode="HTML",
+                )
+            except Exception as exc:
+                log.warning("Failed to send fetch-error notice to %s: %s", chat_id, exc)
 
 
 def _find_matching(prices: list[dict], sub) -> list[dict]:

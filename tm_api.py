@@ -9,21 +9,30 @@ ISRAEL_TZ = timezone(timedelta(hours=3))
 
 _cache: dict = {}
 _CACHE_TTL = 90   # seconds
+_errors: dict[str, int] = {}  # url → consecutive failure count
 
 
 def _get(path: str) -> dict | list | None:
     url    = f"{config.TM_BASE}/{path}"
     cached = _cache.get(url)
     if cached and time.time() - cached[0] < _CACHE_TTL:
+        _errors.pop(url, None)
         return cached[1]
     try:
         r = requests.get(url, headers=config.TM_HEADERS, timeout=15)
         r.raise_for_status()
         data = r.json()
         _cache[url] = (time.time(), data)
+        _errors.pop(url, None)
         return data
     except Exception:
+        _errors[url] = _errors.get(url, 0) + 1
         return None
+
+
+def get_error_count(path: str) -> int:
+    """Return consecutive failure count for a given API path."""
+    return _errors.get(f"{config.TM_BASE}/{path}", 0)
 
 
 def _inner(resp) -> dict | list | None:
