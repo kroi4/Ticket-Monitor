@@ -28,9 +28,14 @@ def _build_summary_text(subs: list) -> str:
             price = f"עד {sub.max_price_ils:.0f} ₪"
         else:
             price = "כל המחירים"
+        if sub.perf_date:
+            dow      = tm_api.dow_he(sub.perf_date)
+            date_str = f"{sub.perf_date} ({dow})"
+        else:
+            date_str = "כל התאריכים"
         lines.append(
             f"🎭 <b>{sub.event_name or sub.event_code}</b>\n"
-            f"  📅 {sub.perf_date or 'כל התאריכים'}\n"
+            f"  📅 {date_str}\n"
             f"  💰 {price}"
         )
     updated = datetime.now().strftime("%d/%m %H:%M")
@@ -209,7 +214,8 @@ async def _show_performances(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
     keyboard = []
     for p in perfs:
-        label = f"{p['emoji']} {p['date_str']} — {p['status_label']}"
+        dow   = tm_api.dow_he(p["date_str"])
+        label = f"{p['emoji']} {p['date_str']} ({dow}) — {p['status_label']}"
         keyboard.append([InlineKeyboardButton(label, callback_data=f"pf:{event_code}:{p['perf_code']}")])
     keyboard.append([InlineKeyboardButton("🔙 חזרה", callback_data="back:events")])
 
@@ -308,6 +314,12 @@ async def _create_sub(update: Update, context: ContextTypes.DEFAULT_TYPE,
     else:
         price_label = "כל המחירים"
 
+    if perf_date:
+        dow = tm_api.dow_he(perf_date)
+        perf_date_display = f"{perf_date} ({dow})"
+    else:
+        perf_date_display = perf_date
+
     keyboard = [
         [InlineKeyboardButton("📋 כל ההתראות שלי", callback_data="alerts")],
         [InlineKeyboardButton("🏠 ראשי", callback_data="back:sources")],
@@ -316,7 +328,7 @@ async def _create_sub(update: Update, context: ContextTypes.DEFAULT_TYPE,
     text = (
         f"✅ <b>מעקב הוגדר!</b>\n\n"
         f"🎭 {event_name}\n"
-        f"📅 {perf_date}\n"
+        f"📅 {perf_date_display}\n"
         f"💰 {price_label}\n\n"
         f"תקבל התראה כשיהיו כרטיסים מתאימים."
     )
@@ -351,7 +363,11 @@ async def _show_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for sub in subs:
             price_label  = f"עד {sub.max_price_ils:.0f} ₪" if sub.max_price_ils else "כל מחיר"
             ticket_label = sub.ticket_desc or "כל הכרטיסים"
-            date_label   = sub.perf_date or "כל התאריכים"
+            if sub.perf_date:
+                dow        = tm_api.dow_he(sub.perf_date)
+                date_label = f"{sub.perf_date} ({dow})"
+            else:
+                date_label = "כל התאריכים"
             lines.append(f"• <b>{sub.event_name}</b> | {date_label} | {ticket_label} | {price_label}")
             keyboard.append([InlineKeyboardButton(
                 f"🗑️ {sub.event_name} {date_label}",

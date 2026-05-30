@@ -137,14 +137,16 @@ def _build_key(matching: list[dict]) -> str:
 
 
 async def _send_alert(bot: Bot, chat_id: str, sub, perf: dict, matching: list[dict]):
-    event_name = sub.event_name or sub.event_code
-    date_str   = perf["date_str"]
-    buy_url    = perf["buy_url"]
+    event_name  = sub.event_name or sub.event_code
+    date_str    = perf["date_str"]
+    buy_url     = perf["buy_url"]
     emoji, status_label = perf["emoji"], perf["status_label"]
+    dow         = tm_api.dow_he(date_str)
+    date_display = f"{date_str} ({dow})" if dow else date_str
 
     lines = [
         f"🎟️ <b>{event_name}</b>",
-        f"📅 {date_str}  {emoji} {status_label}",
+        f"📅 {date_display}  {emoji} {status_label}",
         "",
         f"נמצאו <b>{len(matching)}</b> סוגי כרטיס:",
         "",

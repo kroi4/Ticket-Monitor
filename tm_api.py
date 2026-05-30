@@ -52,8 +52,20 @@ STATUS_LABELS = {
     "s02_soldout":         ("🔴", "אזל מהמלאי"),
 }
 
+_DAYS_HE = ["ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳", "א׳"]  # Mon–Sun
+
+
 def status_label(status: str) -> tuple[str, str]:
     return STATUS_LABELS.get(status, ("⚫", status or "לא ידוע"))
+
+
+def dow_he(date_str: str) -> str:
+    """Hebrew day-of-week abbreviation for a 'DD/MM/YYYY HH:MM' string."""
+    try:
+        d = datetime.strptime(date_str.split()[0], "%d/%m/%Y")
+        return _DAYS_HE[d.weekday()]
+    except Exception:
+        return ""
 
 
 # ── Public API ────────────────────────────────────────────
