@@ -9,6 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from authlib.integrations.starlette_client import OAuth
 import config
 import db
+import tm_api
 
 log = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ app = FastAPI(title="Ticket Monitor")
 app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY, max_age=86400 * 30)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+templates.env.filters["dow_he"] = tm_api.dow_he
 
 # ── Google OAuth ─────────────────────────────────────────
 oauth = OAuth()
@@ -99,7 +101,6 @@ async def dashboard(request: Request):
     subs = db.get_subscriptions_for_user(user.id)
 
     # Build event image lookup from TM API
-    import tm_api
     events_list = tm_api.get_all_events()
     event_meta  = {e["event_code"]: e for e in events_list}
 

@@ -266,6 +266,12 @@ a:hover { text-decoration: underline; }
 .meta-row   { display: flex; align-items: baseline; gap: .4rem; font-size: .86rem; }
 .meta-icon  { font-size: .8rem; flex-shrink: 0; }
 
+.dow-chip {
+  font-size: .75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 .price-badge {
   display: inline-block;
   padding: .15rem .5rem;

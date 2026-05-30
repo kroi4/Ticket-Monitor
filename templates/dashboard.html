@@ -70,7 +70,12 @@
             <div class="card-meta">
               <div class="meta-row">
                 <span class="meta-icon">📅</span>
-                <span>{{ sub.perf_date or "כל התאריכים" }}</span>
+                <span>
+                  {{ sub.perf_date or "כל התאריכים" }}
+                  {% if sub.perf_date %}
+                  <span class="dow-chip">({{ sub.perf_date | dow_he }})</span>
+                  {% endif %}
+                </span>
               </div>
               <div class="meta-row">
                 <span class="meta-icon">💰</span>
