@@ -294,6 +294,8 @@ async def _show_tickets(update: Update, context: ContextTypes.DEFAULT_TYPE,
             "🗑️ בטל מעקב",
             callback_data=f"cancel:{existing_sub.id}:{event_code}:{perf_code}"
         )])
+    if perf and perf.get("buy_url"):
+        keyboard.append([InlineKeyboardButton("🔗 דף ההופעה", url=perf["buy_url"])])
     keyboard.append([InlineKeyboardButton("🔙 חזרה", callback_data=f"back:ev:{event_code}")])
 
     status_line  = f"{emoji} {slabel}" if slabel else ""
