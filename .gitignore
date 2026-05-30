@@ -5,6 +5,9 @@
 *.db
 *.log
 
+# Local IDE / tooling
+.claude/
+
 # Python cache
 __pycache__/
 *.pyc
