@@ -157,7 +157,11 @@ async def delete_subscription(request: Request, sub_id: int):
     user = current_user(request)
     if not user:
         return JSONResponse({"error": "not_logged_in"}, status_code=401)
-    deleted = db.delete_subscription(sub_id, owner_user_id=user.id)
+    deleted = db.delete_subscription(
+        sub_id,
+        owner_user_id=user.id,
+        owner_chat_id=user.telegram_chat_id,
+    )
     if not deleted:
         return JSONResponse({"error": "not_found"}, status_code=404)
     return JSONResponse({"ok": True})

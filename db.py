@@ -87,6 +87,18 @@ def init_db():
                 conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {defn}"))
         conn.commit()
 
+    # Migrate orphan bot-created subscriptions to linked user accounts
+    with Session() as s:
+        orphans = s.query(Subscription).filter(
+            Subscription.user_id.is_(None),
+            Subscription.telegram_chat_id.isnot(None),
+        ).all()
+        for sub in orphans:
+            user = s.query(User).filter_by(telegram_chat_id=sub.telegram_chat_id).first()
+            if user:
+                sub.user_id = user.id
+        s.commit()
+
 
 # ── CRUD helpers ──────────────────────────────────────────
 
@@ -118,6 +130,12 @@ def link_telegram(user_id: int, chat_id: str, username: str | None = None):
         if u:
             u.telegram_chat_id  = chat_id
             u.telegram_username = username
+            # Migrate orphan bot-created subscriptions to this user account
+            orphans = s.query(Subscription).filter_by(
+                telegram_chat_id=chat_id, active=True
+            ).filter(Subscription.user_id.is_(None)).all()
+            for sub in orphans:
+                sub.user_id = user_id
             s.commit()
 
 
@@ -172,12 +190,17 @@ def delete_subscription(sub_id: int, owner_chat_id: str | None = None, owner_use
         sub = s.query(Subscription).filter_by(id=sub_id).first()
         if not sub:
             return False
-        # verify ownership
-        if owner_chat_id and sub.telegram_chat_id != owner_chat_id and (
-            not sub.user or str(sub.user.telegram_chat_id) != owner_chat_id
+        # verify ownership — at least one identifier must match
+        owns = False
+        if owner_user_id and sub.user_id == owner_user_id:
+            owns = True
+        if owner_chat_id and (
+            sub.telegram_chat_id == owner_chat_id
+            or (sub.user and str(sub.user.telegram_chat_id) == owner_chat_id)
         ):
-            if not owner_user_id or sub.user_id != owner_user_id:
-                return False
+            owns = True
+        if not owns:
+            return False
         s.delete(sub)
         s.commit()
         return True
@@ -207,7 +230,18 @@ def get_subscriptions_for_chat(chat_id: str) -> list[Subscription]:
 
 def get_subscriptions_for_user(user_id: int) -> list[Subscription]:
     with Session() as s:
+        user = s.query(User).filter_by(id=user_id).first()
         subs = s.query(Subscription).filter_by(user_id=user_id, active=True).all()
+        seen_ids = {sub.id for sub in subs}
+        # Also include any remaining orphan subs linked via telegram_chat_id
+        if user and user.telegram_chat_id:
+            orphans = s.query(Subscription).filter_by(
+                telegram_chat_id=user.telegram_chat_id, active=True
+            ).filter(Subscription.user_id.is_(None)).all()
+            for sub in orphans:
+                if sub.id not in seen_ids:
+                    seen_ids.add(sub.id)
+                    subs.append(sub)
         return [_detach(s2) for s2 in subs]
 
 
