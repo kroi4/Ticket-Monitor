@@ -135,7 +135,8 @@ async def _show_sources(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await _edit_or_reply(
         update,
-        "🎟️ <b>מעקב כרטיסי הופעות</b>\n\nבחר מקור כרטיסים:",
+        f"🎟️ <b>מעקב כרטיסי הופעות</b>\n\nבחר מקור כרטיסים:\n\n"
+        f"🌐 {config.WEB_BASE_URL}",
         InlineKeyboardMarkup(keyboard),
     )
 
