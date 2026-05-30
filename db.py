@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from sqlalchemy import (
     create_engine, Column, Integer, String, Float,
-    Boolean, DateTime, ForeignKey, Text
+    Boolean, DateTime, ForeignKey, Text, or_
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 import config
@@ -104,6 +104,29 @@ def init_db():
                 conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {defn}"))
         conn.commit()
 
+    # One-time cleanup: remove duplicate subscriptions created before the fix.
+    # Keep the oldest sub per (owner, event_code, perf_code, max_price_ils).
+    with Session() as s:
+        all_subs = (
+            s.query(Subscription).filter_by(active=True)
+            .order_by(Subscription.created_at).all()
+        )
+        seen: set = set()
+        to_delete: list[int] = []
+        for sub in all_subs:
+            owner = f"u:{sub.user_id}" if sub.user_id else f"c:{sub.telegram_chat_id}"
+            key   = (owner, sub.event_code, sub.perf_code, sub.max_price_ils)
+            if key in seen:
+                to_delete.append(sub.id)
+            else:
+                seen.add(key)
+        for sub_id in to_delete:
+            dup = s.query(Subscription).filter_by(id=sub_id).first()
+            if dup:
+                s.delete(dup)
+        if to_delete:
+            s.commit()
+
     # Migrate orphan bot-created subscriptions to linked user accounts
     with Session() as s:
         orphans = s.query(Subscription).filter(
@@ -174,15 +197,27 @@ def create_subscription(
     user_id: int | None = None,
 ) -> Subscription:
     with Session() as s:
-        # prevent exact duplicates
-        existing = s.query(Subscription).filter_by(
-            telegram_chat_id=telegram_chat_id,
-            user_id=user_id,
-            event_code=event_code,
-            perf_code=perf_code,
-            ticket_code=ticket_code,
-            active=True,
-        ).first()
+        # Build owner filter — a sub belongs to this user if matched by user_id OR chat_id
+        owner_clauses = []
+        if user_id:
+            owner_clauses.append(Subscription.user_id == user_id)
+        if telegram_chat_id:
+            owner_clauses.append(Subscription.telegram_chat_id == telegram_chat_id)
+        owner_filter = or_(*owner_clauses) if owner_clauses else None
+
+        existing = None
+        if owner_filter is not None:
+            existing = (
+                s.query(Subscription)
+                .filter(
+                    owner_filter,
+                    Subscription.event_code == event_code,
+                    Subscription.perf_code == perf_code,
+                    Subscription.max_price_ils == max_price_ils,
+                    Subscription.active == True,
+                )
+                .first()
+            )
         if existing:
             return _detach(existing)
         sub = Subscription(

@@ -296,6 +296,7 @@ async def _create_sub(update: Update, context: ContextTypes.DEFAULT_TYPE,
     # ticket_desc = display label for the selected ceiling tier
     ticket_desc = ticket["description"] if ticket and ticket_code != "ALL" else None
 
+    linked_user = db.get_user_by_chat_id(chat_id)
     sub = db.create_subscription(
         telegram_chat_id=chat_id,
         event_code=event_code,
@@ -305,6 +306,7 @@ async def _create_sub(update: Update, context: ContextTypes.DEFAULT_TYPE,
         ticket_desc=ticket_desc,
         ticket_code=None,          # filtering is by price only, not by specific code
         max_price_ils=max_price,
+        user_id=linked_user.id if linked_user else None,
     )
 
     if max_price:
